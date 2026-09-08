@@ -1,0 +1,41 @@
+[gd_scene format=3 uid="uid://d1e6301qt30f3"]
+
+[ext_resource type="Texture2D" uid="uid://biu8a0o1ca2vx" path="res://icon.svg" id="1_4flbx"]
+[ext_resource type="Script" uid="uid://bdseapbegk8o" path="res://player.gd" id="1_onrkg"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_onrkg"]
+size = Vector2(16, 16)
+
+[sub_resource type="Gradient" id="Gradient_dwbse"]
+colors = PackedColorArray(1, 1, 1, 1, 0, 0, 0, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_036b0"]
+gradient = SubResource("Gradient_dwbse")
+width = 16
+height = 16
+fill = 1
+fill_from = Vector2(0.49565217, 0.49565217)
+fill_to = Vector2(0.8130435, 0.13478261)
+
+[node name="Player" type="CharacterBody2D" unique_id=270722006]
+script = ExtResource("1_onrkg")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=299683321]
+position = Vector2(56, 56)
+shape = SubResource("RectangleShape2D_onrkg")
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1071346914]
+position_smoothing_enabled = true
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1897922946]
+position = Vector2(56, 56)
+scale = Vector2(0.12499999, 0.12499999)
+texture = ExtResource("1_4flbx")
+
+[node name="PointLight2D" type="PointLight2D" parent="." unique_id=2108810319]
+position = Vector2(56, 56)
+scale = Vector2(1.475, 1.55)
+color = Color(0.6502943, 0.6375422, 7.70092e-07, 1)
+energy = 0.5
+texture = SubResource("GradientTexture2D_036b0")
+texture_scale = 2.5
