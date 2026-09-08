@@ -17,7 +17,7 @@ fill = 1
 fill_from = Vector2(0.49565217, 0.49565217)
 fill_to = Vector2(0.8130435, 0.13478261)
 
-[node name="Player" type="CharacterBody2D" unique_id=270722006]
+[node name="Player" type="CharacterBody2D" unique_id=270722006 groups=["player"]]
 script = ExtResource("1_onrkg")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=299683321]

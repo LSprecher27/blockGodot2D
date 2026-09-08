@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://bbyf3ixijpcv1"]
+
+[ext_resource type="Script" uid="uid://bvs5u0hg1f6x3" path="res://ItemDrop.gd" id="1_nhhfg"]
+
+[node name="ItemDrop" type="Node2D" unique_id=175702615]
+script = ExtResource("1_nhhfg")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1180346194]

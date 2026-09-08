@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://bhv7jkhrn8qhw" path="res://world.gd" id="1_fj7yv"]
 [ext_resource type="Texture2D" uid="uid://c4jkv2qqcv407" path="res://worldTiles.png" id="2_tlwt5"]
+[ext_resource type="PackedScene" uid="uid://bd72y0c0rff5y" path="res://HotbarUI.tscn" id="3_036b0"]
 [ext_resource type="PackedScene" uid="uid://d1e6301qt30f3" path="res://player.tscn" id="3_tlwt5"]
 [ext_resource type="Texture2D" uid="uid://ds25s0823p378" path="res://New Piskel.png" id="4_aqk2v"]
 
@@ -168,6 +169,8 @@ collision_enabled = false
 
 [node name="TileMapLayer" type="TileMapLayer" parent="." unique_id=791918272]
 tile_set = SubResource("TileSet_t2dwb")
+
+[node name="HotbarUI" parent="." unique_id=559798249 instance=ExtResource("3_036b0")]
 
 [node name="Player" parent="." unique_id=270722006 instance=ExtResource("3_tlwt5")]
 
