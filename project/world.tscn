@@ -168,6 +168,7 @@ tile_set = SubResource("TileSet_t2dwb")
 collision_enabled = false
 
 [node name="TileMapLayer" type="TileMapLayer" parent="." unique_id=791918272]
+texture_filter = 1
 tile_set = SubResource("TileSet_t2dwb")
 
 [node name="HotbarUI" parent="." unique_id=559798249 instance=ExtResource("3_036b0")]
@@ -178,3 +179,18 @@ tile_set = SubResource("TileSet_t2dwb")
 visible = false
 scale = Vector2(0.5, 0.5)
 sprite_frames = SubResource("SpriteFrames_t2dwb")
+
+[node name="PlacementPreview" type="Node2D" parent="." unique_id=2002925969]
+
+[node name="BlockGhost" type="Sprite2D" parent="PlacementPreview" unique_id=537149162]
+modulate = Color(0.003921569, 0.003921569, 0.003921569, 1)
+texture_filter = 1
+centered = false
+
+[node name="SelectionBox" type="ReferenceRect" parent="PlacementPreview" unique_id=710528450]
+custom_minimum_size = Vector2(16, 16)
+offset_right = 40.0
+offset_bottom = 40.0
+mouse_filter = 2
+border_color = Color(0.8995071, 0.99993974, 0.61830777, 1)
+editor_only = false
