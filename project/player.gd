@@ -23,12 +23,13 @@ var target_player_color: Color = SURFACE_COLOR
 var back_wall_layer: TileMapLayer
 var tile_map_layer: TileMapLayer
 
-# --- ANIMATION STATE ---
+# --- ANIMATION & MINING STATE ---
 var anim_timer: float = 0.0
 var idle_timer: float = 0.0
 var walk_frame: int = 2
 var is_mining: bool = false
 var mining_timer: float = 0.0
+const MAX_MINING_RANGE_TILES: int = 2
 
 # --- INVENTORY ---
 const INVENTORY_SIZE: int = 5
@@ -151,14 +152,42 @@ func _physics_process(delta: float) -> void:
 	handle_animations(delta, direction)
 	update_held_item_position()
 
-# World.gd calls these when the mouse is clicked or released
-func start_mining() -> void:
+# --- MINING & RANGE CHECKS ---
+func start_mining(target_pos: Vector2 = Vector2.INF) -> bool:
+	if target_pos != Vector2.INF and not is_position_in_range(target_pos):
+		stop_mining()
+		return false
+
 	is_mining = true
 	mining_timer = 0.0
+	return true
 
 func stop_mining() -> void:
 	is_mining = false
 	mining_timer = 0.0
+
+func is_tile_in_range(target_tile: Vector2i) -> bool:
+	if not is_instance_valid(tile_map_layer):
+		tile_map_layer = get_parent().get_node_or_null("TileMapLayer")
+		if not is_instance_valid(tile_map_layer):
+			tile_map_layer = get_tree().root.find_child("TileMapLayer", true, false)
+			if not is_instance_valid(tile_map_layer):
+				return false
+
+	var player_tile: Vector2i = tile_map_layer.local_to_map(tile_map_layer.to_local(global_position))
+	var diff: Vector2i = (target_tile - player_tile).abs()
+	return diff.x <= MAX_MINING_RANGE_TILES and diff.y <= MAX_MINING_RANGE_TILES
+
+func is_position_in_range(target_pos: Vector2) -> bool:
+	if not is_instance_valid(tile_map_layer):
+		tile_map_layer = get_parent().get_node_or_null("TileMapLayer")
+		if not is_instance_valid(tile_map_layer):
+			tile_map_layer = get_tree().root.find_child("TileMapLayer", true, false)
+			if not is_instance_valid(tile_map_layer):
+				return false
+
+	var target_tile: Vector2i = tile_map_layer.local_to_map(tile_map_layer.to_local(target_pos))
+	return is_tile_in_range(target_tile)
 
 func update_held_item_position() -> void:
 	if not held_item_sprite or not held_item_sprite.visible or not sprite:
@@ -183,11 +212,16 @@ func handle_animations(delta: float, direction: float) -> void:
 
 	# 1. Mining Animation
 	if is_mining:
-		mining_timer += delta * 12.0
-		var mouse_x: float = get_global_mouse_position().x
-		sprite.flip_h = mouse_x < global_position.x
-		sprite.frame = 5 + (int(mining_timer) % 2)
-		return
+		var mouse_pos: Vector2 = get_global_mouse_position()
+		
+		# Automatically stop mining animation if cursor or player moves out of range
+		if not is_position_in_range(mouse_pos):
+			stop_mining()
+		else:
+			mining_timer += delta * 12.0
+			sprite.flip_h = mouse_pos.x < global_position.x
+			sprite.frame = 5 + (int(mining_timer) % 2)
+			return
 
 	# 2. Airborne Pose
 	if not is_on_floor():

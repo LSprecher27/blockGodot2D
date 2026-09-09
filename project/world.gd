@@ -5,10 +5,15 @@ const ITEM_DROP_SCENE: PackedScene = preload("res://item_drop.tscn")
 const TILE_SIZE: int = 16
 const SOURCE_ID: int = 13
 
-# World Dimensions
-const WORLD_WIDTH: int = 120
-const WORLD_HEIGHT: int = 80
+# World Parameters
 const SURFACE_LEVEL: int = 35
+
+# --- CHUNK SYSTEM ---
+const CHUNK_SIZE: int = 16
+const LOAD_RADIUS_X: int = 6  # How many chunks to load left and right
+const LOAD_RADIUS_Y: int = 5  # How many chunks to load up and down
+var loaded_chunks: Dictionary = {}
+var last_player_chunk: Vector2i = Vector2i(999999, 999999)
 
 # Atlas Coordinates (Matching TileSet)
 const TILE_GRASS: Vector2i = Vector2i(2, 0)
@@ -44,8 +49,8 @@ var damage_overlay: Sprite2D
 
 func _ready() -> void:
 	setup_noise()
-	generate_world()
 	spawn_player()
+	check_chunk_loading(true) # Initial terrain generation around spawn
 	
 	if preview_root:
 		preview_root.visible = false
@@ -74,19 +79,63 @@ func setup_noise() -> void:
 	cave_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
 	cave_noise.frequency = 0.07
 
-func generate_world() -> void:
-	if not is_instance_valid(tile_map):
+func spawn_player() -> void:
+	if not is_instance_valid(player) or not is_instance_valid(tile_map):
 		return
 
-	tile_map.clear()
-	if is_instance_valid(back_wall_layer):
-		back_wall_layer.clear()
+	var spawn_x: int = 0
+	var height_offset: int = int(surface_noise.get_noise_1d(spawn_x) * 12.0)
+	var spawn_y: int = (SURFACE_LEVEL + height_offset) - 3
 
-	for x in range(WORLD_WIDTH):
+	var spawn_pos: Vector2 = tile_map.to_global(tile_map.map_to_local(Vector2i(spawn_x, spawn_y)))
+	player.global_position = spawn_pos
+
+func _process(delta: float) -> void:
+	check_chunk_loading()
+	update_placement_preview()
+	process_mining(delta)
+
+# --- CHUNK LOADING LOGIC ---
+func check_chunk_loading(force: bool = false) -> void:
+	if not is_instance_valid(player) or not is_instance_valid(tile_map):
+		return
+
+	var player_tile: Vector2i = tile_map.local_to_map(tile_map.to_local(player.global_position))
+	var player_chunk: Vector2i = Vector2i(
+		int(floor(float(player_tile.x) / float(CHUNK_SIZE))),
+		int(floor(float(player_tile.y) / float(CHUNK_SIZE)))
+	)
+
+	if not force and player_chunk == last_player_chunk:
+		return
+
+	last_player_chunk = player_chunk
+
+	for cx in range(player_chunk.x - LOAD_RADIUS_X, player_chunk.x + LOAD_RADIUS_X + 1):
+		for cy in range(player_chunk.y - LOAD_RADIUS_Y, player_chunk.y + LOAD_RADIUS_Y + 1):
+			var chunk_coord: Vector2i = Vector2i(cx, cy)
+			if not loaded_chunks.has(chunk_coord):
+				generate_chunk(chunk_coord)
+
+func generate_chunk(chunk_coord: Vector2i) -> void:
+	loaded_chunks[chunk_coord] = true
+
+	var start_x: int = chunk_coord.x * CHUNK_SIZE
+	var end_x: int = start_x + CHUNK_SIZE
+	var start_y: int = chunk_coord.y * CHUNK_SIZE
+	var end_y: int = start_y + CHUNK_SIZE
+
+	for x in range(start_x, end_x):
 		var height_offset: int = int(surface_noise.get_noise_1d(x) * 12.0)
 		var ground_y: int = SURFACE_LEVEL + height_offset
 
-		for y in range(ground_y, WORLD_HEIGHT):
+		if end_y <= ground_y:
+			continue # Air chunk above ground
+
+		for y in range(start_y, end_y):
+			if y < ground_y:
+				continue
+
 			var cell: Vector2i = Vector2i(x, y)
 			var depth: int = y - ground_y
 
@@ -103,21 +152,6 @@ func generate_world() -> void:
 				else:
 					tile_map.set_cell(cell, SOURCE_ID, TILE_STONE)
 
-func spawn_player() -> void:
-	if not is_instance_valid(player) or not is_instance_valid(tile_map):
-		return
-
-	var spawn_x: int = int(WORLD_WIDTH * 0.5)
-	var height_offset: int = int(surface_noise.get_noise_1d(spawn_x) * 12.0)
-	var spawn_y: int = (SURFACE_LEVEL + height_offset) - 3
-
-	var spawn_pos: Vector2 = tile_map.to_global(tile_map.map_to_local(Vector2i(spawn_x, spawn_y)))
-	player.global_position = spawn_pos
-
-func _process(delta: float) -> void:
-	update_placement_preview()
-	process_mining(delta)
-
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mouse_pos: Vector2 = get_global_mouse_position()
@@ -126,11 +160,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		# Hold Left Click: Start/Stop continuous mining
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
-				is_mining = true
-				mining_target_cell = cell
-				mining_progress = 0.0
-				if is_instance_valid(player) and player.has_method("start_mining"):
-					player.start_mining()
+				if is_instance_valid(player) and player.has_method("is_tile_in_range") and player.is_tile_in_range(cell):
+					is_mining = true
+					mining_target_cell = cell
+					mining_progress = 0.0
+					if player.has_method("start_mining"):
+						player.start_mining(mouse_pos)
 			else:
 				is_mining = false
 				mining_progress = 0.0
@@ -144,7 +179,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			place_tile(cell)
 
 func process_mining(delta: float) -> void:
-	if not is_mining or not is_instance_valid(tile_map):
+	if not is_mining or not is_instance_valid(tile_map) or not is_instance_valid(player):
 		if damage_overlay:
 			damage_overlay.visible = false
 		return
@@ -152,7 +187,17 @@ func process_mining(delta: float) -> void:
 	var mouse_pos: Vector2 = get_global_mouse_position()
 	var hovered_cell: Vector2i = tile_map.local_to_map(tile_map.to_local(mouse_pos))
 
-	# If mouse moves to a different block, reset the break timer
+	# Stop mining if cursor or player moves out of range
+	if player.has_method("is_tile_in_range") and not player.is_tile_in_range(hovered_cell):
+		is_mining = false
+		mining_progress = 0.0
+		if damage_overlay:
+			damage_overlay.visible = false
+		if player.has_method("stop_mining"):
+			player.stop_mining()
+		return
+
+	# If mouse moves to a different block in range, reset the break timer
 	if hovered_cell != mining_target_cell:
 		mining_target_cell = hovered_cell
 		mining_progress = 0.0
@@ -166,7 +211,6 @@ func process_mining(delta: float) -> void:
 			damage_overlay.visible = true
 			damage_overlay.global_position = tile_map.to_global(tile_map.map_to_local(hovered_cell))
 			
-			# Calculate which of the 4 crack frames to show based on progress percentage
 			var progress_percent: float = mining_progress / BLOCK_BREAK_TIME
 			var stage: int = int(progress_percent * 4.0)
 			damage_overlay.frame = clamp(stage, 0, 3)
@@ -193,6 +237,9 @@ func mine_tile(cell: Vector2i) -> void:
 
 func place_tile(cell: Vector2i) -> void:
 	if not is_instance_valid(tile_map) or not is_instance_valid(player):
+		return
+
+	if player.has_method("is_tile_in_range") and not player.is_tile_in_range(cell):
 		return
 
 	if tile_map.get_cell_source_id(cell) != -1:
@@ -269,7 +316,9 @@ func update_placement_preview() -> void:
 	var player_box: Rect2 = Rect2(player.global_position - Vector2(5, 16), Vector2(10, 32))
 	var tile_box: Rect2 = Rect2(cell_top_left, Vector2(current_tile_size))
 	var overlaps_player: bool = player_box.intersects(tile_box)
-	var can_place: bool = not is_occupied and not overlaps_player
+	
+	var is_in_range: bool = player.has_method("is_tile_in_range") and player.is_tile_in_range(hovered_cell)
+	var can_place: bool = not is_occupied and not overlaps_player and is_in_range
 
 	if selection_box:
 		selection_box.border_color = Color(0.2, 1.0, 0.2, 0.9) if can_place else Color(1.0, 0.2, 0.2, 0.7)
@@ -287,24 +336,21 @@ func update_placement_preview() -> void:
 # --- PROCEDURAL CRACK TEXTURE GENERATOR ---
 func generate_crack_sheet() -> ImageTexture:
 	var img: Image = Image.create(64, 16, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0)) # Fully transparent base
+	img.fill(Color(0, 0, 0, 0))
 
-	var c: Color = Color(0.1, 0.1, 0.1, 0.8) # Dark grey semi-transparent cracks
+	var c: Color = Color(0.1, 0.1, 0.1, 0.8)
 
-	# Stage 1 cracks (Light)
 	var p1: Array = [
 		Vector2i(0, 0), Vector2i(1, 1), Vector2i(2, 2),
 		Vector2i(15, 14), Vector2i(14, 13)
 	]
 	
-	# Stage 2 cracks (Medium)
 	var p2: Array = p1 + [
 		Vector2i(2, 3), Vector2i(3, 4), Vector2i(4, 4), Vector2i(4, 5),
 		Vector2i(13, 12), Vector2i(12, 11), Vector2i(11, 11), Vector2i(11, 10),
 		Vector2i(15, 2), Vector2i(14, 3)
 	]
 	
-	# Stage 3 cracks (Heavy)
 	var p3: Array = p2 + [
 		Vector2i(5, 6), Vector2i(6, 7), Vector2i(7, 7), Vector2i(8, 8),
 		Vector2i(9, 8), Vector2i(10, 9), Vector2i(13, 5), Vector2i(12, 6),
@@ -312,15 +358,8 @@ func generate_crack_sheet() -> ImageTexture:
 		Vector2i(3, 13), Vector2i(4, 12)
 	]
 
-	# Frame 0 is left empty (x offset 0)
-	
-	# Draw Frame 1 (x offset 16)
 	for p in p1: img.set_pixel(16 + p.x, p.y, c)
-	
-	# Draw Frame 2 (x offset 32)
 	for p in p2: img.set_pixel(32 + p.x, p.y, c)
-	
-	# Draw Frame 3 (x offset 48)
 	for p in p3: img.set_pixel(48 + p.x, p.y, c)
 
 	return ImageTexture.create_from_image(img)
